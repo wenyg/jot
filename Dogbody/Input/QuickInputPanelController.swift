@@ -12,7 +12,7 @@ final class QuickInputPanel: NSPanel {
 final class QuickInputPanelController: NSObject, NSWindowDelegate {
     private var panel: QuickInputPanel?
 
-    var onSubmit: ((String) -> Void)?
+    var onSubmit: ((String, ParsedInput.Kind?) -> Void)?
     var onDismiss: (() -> Void)?
     var isVisible: Bool { panel?.isVisible ?? false }
 
@@ -38,8 +38,8 @@ final class QuickInputPanelController: NSObject, NSWindowDelegate {
         panel.delegate = self
 
         let view = QuickInputView(
-            onSubmit: { [weak self] text in
-                self?.onSubmit?(text)
+            onSubmit: { [weak self] text, override in
+                self?.onSubmit?(text, override)
                 self?.hide()
             },
             onCancel: { [weak self] in

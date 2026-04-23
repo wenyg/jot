@@ -109,6 +109,39 @@ final class Store: ObservableObject {
         bumpRevision()
     }
 
+    /// Reclassify a mis-parsed todo as a log entry.
+    func convertTodoToEntry(_ todo: Todo) throws {
+        try dbQueue.write { db in
+            var entry = Entry(
+                id: UUID().uuidString,
+                content: todo.content,
+                createdAt: todo.createdAt,
+                tags: todo.tags
+            )
+            try entry.insert(db)
+            _ = try Todo.deleteOne(db, id: todo.id)
+        }
+        bumpRevision()
+    }
+
+    /// Reclassify a log entry as a todo (useful when the heuristic mis-classifies).
+    func convertEntryToTodo(_ entry: Entry) throws {
+        try dbQueue.write { db in
+            var todo = Todo(
+                id: UUID().uuidString,
+                content: entry.content,
+                createdAt: entry.createdAt,
+                dueAt: nil,
+                doneAt: nil,
+                tags: entry.tags,
+                priority: 0
+            )
+            try todo.insert(db)
+            _ = try Entry.deleteOne(db, id: entry.id)
+        }
+        bumpRevision()
+    }
+
     // MARK: - Reads
 
     func allTodos() -> [Todo] {

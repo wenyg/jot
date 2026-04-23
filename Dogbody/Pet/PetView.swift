@@ -1,6 +1,9 @@
 import SwiftUI
 import AppKit
 
+/// Single-sprite pet: one PNG, all state differences expressed through
+/// transform animations (scale / rotation / offset). No emoji stickers,
+/// no thought bubbles, no "Z" decals — the design IS the typography.
 struct PetView: View {
     @ObservedObject var animator: PetAnimator
     let onTap: () -> Void
@@ -14,17 +17,18 @@ struct PetView: View {
     var body: some View {
         ZStack {
             Color.clear
-            Text(emoji)
-                .font(.system(size: petSize * 0.82))
-                .scaleEffect(bodyScale)
-                .rotationEffect(.degrees(bodyTilt))
-                .offset(y: bodyBobY)
+            Image("pet")
+                .resizable()
+                .interpolation(.high)
+                .aspectRatio(contentMode: .fit)
+                .frame(width: petSize, height: petSize)
+                .opacity(bodyOpacity)
+                .scaleEffect(x: bodyScaleX, y: bodyScaleY, anchor: .bottom)
+                .rotationEffect(.degrees(bodyTilt), anchor: .bottom)
+                .offset(x: bodyOffsetX, y: bodyOffsetY)
                 .animation(.easeInOut(duration: 0.18), value: animator.frame)
-                .animation(.easeInOut(duration: 0.25), value: animator.state)
-                .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 2)
-
-            stateBadge
-                .offset(x: petSize * 0.32, y: -petSize * 0.36)
+                .animation(.easeInOut(duration: 0.3), value: animator.state)
+                .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 3)
         }
         .frame(width: petSize + 24, height: petSize + 24)
         .contentShape(Rectangle())
@@ -52,39 +56,37 @@ struct PetView: View {
                     didDrag = false
                 }
         )
-        .help(helpText)
+        .help("点我记一笔, 拖我换位置")
     }
 
-    // MARK: - Visuals
+    // MARK: - Per-state transforms
 
-    /// Placeholder sprite: emoji that changes per state.
-    /// Replace with an `Image(name)` frame sequence once art assets are in `Resources/PetSprites/`.
-    private var emoji: String {
-        switch animator.state {
-        case .idle: return "🐶"
-        case .happy: return "🐕"
-        case .thinking: return "🐶"
-        case .sleep: return "💤"
-        case .celebrate: return "🎉"
-        case .remind: return "🔔"
-        }
-    }
-
-    private var bodyScale: CGFloat {
+    /// Vertical scale with bottom anchor (so breathing feels like a belly-rise,
+    /// not a head-rise).
+    private var bodyScaleY: CGFloat {
         let f = animator.frame
         switch animator.state {
         case .idle:
-            return [1.00, 1.03, 1.00, 0.97][f % 4]
+            return [1.000, 1.025, 1.015, 0.995][f % 4]
         case .happy:
-            return [1.05, 1.15, 1.05, 1.10, 1.05, 1.00][f % 6]
+            return [1.05, 1.12, 1.08, 1.10][f % 4]
         case .thinking:
-            return [1.00, 1.02, 1.00, 1.02][f % 4]
+            return [1.000, 1.015, 1.000, 1.015][f % 4]
         case .sleep:
-            return [0.98, 1.02][f % 2]
+            // A long, slow exhale. Pet is "lying down" → squashed vertically.
+            return [0.56, 0.58, 0.57][f % 3]
         case .celebrate:
-            return [1.00, 1.20, 1.00, 1.25, 1.10, 1.30, 1.05, 1.15][f % 8]
+            return [1.00, 1.25, 1.00, 1.25, 1.05][f % 5]
         case .remind:
-            return [1.00, 1.20, 0.85, 1.20, 0.90, 1.10][f % 6]
+            return [1.00, 1.06, 1.00, 1.06][f % 4]
+        }
+    }
+
+    private var bodyScaleX: CGFloat {
+        switch animator.state {
+        case .sleep: return 1.18  // splayed out while asleep
+        case .celebrate: return 1.0
+        default: return 1.0
         }
     }
 
@@ -92,48 +94,46 @@ struct PetView: View {
         let f = animator.frame
         switch animator.state {
         case .celebrate:
-            return [-8, 8, -10, 10, -6, 6, -4, 4][f % 8]
+            return [-8, 8, -10, 10, -4, 4][f % 6]
         case .remind:
-            return [-12, 12, -10, 10, -6, 6][f % 6]
+            // Gentle head-tilt left-right — "hey, I'm here."
+            return [-10, 10, -10, 10][f % 4]
         case .happy:
-            return [-3, 3, -3, 3, -2, 2][f % 6]
+            return [-3, 3, -2, 2][f % 4]
+        case .thinking:
+            return [0, 4, 0, -4][f % 4]
+        case .sleep:
+            return 90  // lying on its side
         default:
             return 0
         }
     }
 
-    private var bodyBobY: CGFloat {
+    private var bodyOffsetX: CGFloat {
+        switch animator.state {
+        case .sleep: return -4
+        default: return 0
+        }
+    }
+
+    private var bodyOffsetY: CGFloat {
         let f = animator.frame
         switch animator.state {
         case .idle:
-            return [0, -2, 0, 2][f % 4]
+            return [0, -1.5, 0, 1][f % 4]
         case .sleep:
-            return [0, -1][f % 2]
+            return 14  // settled onto the ground
+        case .celebrate:
+            return [0, -10, 0, -8, 0][f % 5]
         default:
             return 0
         }
     }
 
-    @ViewBuilder
-    private var stateBadge: some View {
+    private var bodyOpacity: Double {
         switch animator.state {
-        case .thinking:
-            Text("💭")
-                .font(.system(size: 22))
-                .transition(.scale.combined(with: .opacity))
-        case .sleep:
-            Text("Z")
-                .font(.system(size: 20, weight: .bold, design: .rounded))
-                .foregroundStyle(.secondary)
-        case .happy:
-            Text("✨")
-                .font(.system(size: 20))
-        default:
-            EmptyView()
+        case .sleep: return 0.75
+        default: return 1.0
         }
-    }
-
-    private var helpText: String {
-        "点击记一笔, 拖动换位置"
     }
 }

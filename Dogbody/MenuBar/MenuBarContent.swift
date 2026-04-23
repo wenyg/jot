@@ -4,6 +4,9 @@ struct MenuBarContent: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
+        Button("打开 Jot") { openWindow(id: WindowID.river) }
+            .keyboardShortcut("j", modifiers: [.command, .shift])
+
         Button("显示 / 隐藏宠物") {
             AppDelegate.shared?.petController.toggle()
         }
@@ -11,18 +14,10 @@ struct MenuBarContent: View {
 
         Divider()
 
-        Button("Todo 列表") { openWindow(id: WindowID.todo) }
-        Button("时间线") { openWindow(id: WindowID.timeline) }
-        Button("周报") { openWindow(id: WindowID.weekly) }
-
-        Divider()
-
         Button("设置...") { openWindow(id: WindowID.settings) }
             .keyboardShortcut(",", modifiers: .command)
 
-        Divider()
-
-        Button("退出 Dogbody") {
+        Button("退出 Jot") {
             NSApp.terminate(nil)
         }
         .keyboardShortcut("q", modifiers: .command)

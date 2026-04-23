@@ -15,8 +15,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         _ = Store.shared
 
         petController.animator = animator
-        petController.onSubmit = { [weak self] text in
-            self?.handleInput(text)
+        petController.onSubmit = { [weak self] text, override in
+            self?.handleInput(text, override: override)
         }
         petController.onOpenRequested = { [weak self] in
             self?.animator.set(.thinking)
@@ -26,7 +26,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
         petController.show()
 
-        NotificationManager.shared.requestAuthorization()
+        // Notifications are opt-in (off by default) — the reminder experience
+        // is "pet walks to center and waits for you". We only request auth if
+        // the user has explicitly turned notifications on in Settings.
+        if UserDefaults.standard.bool(forKey: "enableSystemNotifications") {
+            NotificationManager.shared.requestAuthorization()
+        }
 
         reminderScheduler.onDailyReminder = { [weak self] in
             self?.fireDailyReminder()
@@ -40,8 +45,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     // MARK: - Input handling
 
-    func handleInput(_ raw: String) {
-        let parsed = InputParser.parse(raw)
+    func handleInput(_ raw: String, override: ParsedInput.Kind? = nil) {
+        var parsed = InputParser.parse(raw)
+        if let override { parsed.kind = override }
         guard !parsed.content.isEmpty else { return }
         do {
             try Store.shared.save(parsed)
@@ -51,6 +57,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                     self?.animator.set(.idle)
                 }
             }
+            // Recording during a reminder dismisses it: the pet goes home.
+            petController.walkHome()
+
             // If this is a completion-worthy moment (last todo of the day), celebrate.
             if parsed.kind == .todo, Store.shared.hasNoOpenTodosToday() {
                 animator.set(.celebrate)
@@ -59,26 +68,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         } catch {
-            NSLog("Dogbody save error: \(error)")
+            NSLog("Jot save error: \(error)")
         }
     }
 
+    /// Daily reminder: the pet walks to the center and waits. No system
+    /// notification unless the user has explicitly opted in.
     private func fireDailyReminder() {
-        let openCount = Store.shared.openTodoCountToday()
-        if openCount > 0 {
-            animator.set(.remind)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 3.0) { [weak self] in
-                self?.animator.set(.idle)
-            }
-            NotificationManager.shared.showImmediate(
-                title: "写日报时间到",
-                body: "今天还有 \(openCount) 个 todo 未完成,要不要记一下?"
-            )
-        } else {
-            NotificationManager.shared.showImmediate(
-                title: "今天辛苦啦",
-                body: "今天的 todo 都完成了,给自己点个赞 🐾"
-            )
+        petController.walkToCenter()
+
+        if UserDefaults.standard.bool(forKey: "enableSystemNotifications") {
+            let openCount = Store.shared.openTodoCountToday()
+            let body = openCount > 0
+                ? "今天还有 \(openCount) 件事没划掉, 要不要记一笔?"
+                : "今天辛苦啦, 记点什么吧."
+            NotificationManager.shared.showImmediate(title: "Jot", body: body)
         }
     }
 }

@@ -4,11 +4,12 @@ struct SettingsView: View {
     @AppStorage("enableDailyReminder") private var enabled: Bool = true
     @AppStorage("dailyReminderHour") private var hour: Int = 18
     @AppStorage("dailyReminderMinute") private var minute: Int = 0
+    @AppStorage("enableSystemNotifications") private var systemNotifications: Bool = false
 
     var body: some View {
         Form {
-            Section("每日提醒") {
-                Toggle("到点提醒写日报", isOn: $enabled)
+            Section("宠物提醒") {
+                Toggle("到点让宠物走到屏幕中间等你", isOn: $enabled)
                     .onChange(of: enabled) { _ in notifyChange() }
 
                 HStack {
@@ -35,13 +36,19 @@ struct SettingsView: View {
                     .onChange(of: minute) { _ in notifyChange() }
                 }
                 .disabled(!enabled)
+
+                Toggle("同时发系统通知", isOn: $systemNotifications)
+                    .disabled(!enabled)
+                    .onChange(of: systemNotifications) { on in
+                        if on { NotificationManager.shared.requestAuthorization() }
+                    }
             }
 
             Section("关于") {
                 HStack {
                     Text("版本")
                     Spacer()
-                    Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.1.0")
+                    Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0.2.0")
                         .foregroundStyle(.secondary)
                 }
                 HStack {
@@ -52,7 +59,7 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 420, height: 320)
+        .frame(width: 420, height: 360)
         .navigationTitle("设置")
     }
 

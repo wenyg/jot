@@ -25,13 +25,13 @@ targets:
     info:
       path: Dogbody/Info.plist
       properties:
-        CFBundleName: Dogbody
-        CFBundleDisplayName: Dogbody
-        CFBundleShortVersionString: "0.1.0"
-        CFBundleVersion: "1"
+        CFBundleName: Jot
+        CFBundleDisplayName: Jot
+        CFBundleShortVersionString: "0.2.0"
+        CFBundleVersion: "2"
         LSUIElement: true
         LSMinimumSystemVersion: "13.0"
-        NSHumanReadableCopyright: "Copyright (c) 2026 Dogbody"
+        NSHumanReadableCopyright: "Copyright (c) 2026 Jot"
         NSSupportsAutomaticTermination: false
         NSSupportsSuddenTermination: false
     settings:
@@ -45,5 +45,5 @@ targets:
         CODE_SIGN_IDENTITY: "-"
         COMBINE_HIDPI_IMAGES: YES
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
-        MARKETING_VERSION: "0.1.0"
-        CURRENT_PROJECT_VERSION: "1"
+        MARKETING_VERSION: "0.2.0"
+        CURRENT_PROJECT_VERSION: "2"
