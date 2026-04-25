@@ -47,8 +47,7 @@ final class PetWindowController: NSObject {
 
         let view = PetView(
             animator: animatorRef,
-            onTap: { [weak self] in self?.handleTap() },
-            getWindow: { [weak self] in self?.window }
+            onTap: { [weak self] in self?.handleTap() }
         )
         win.contentView = NSHostingView(rootView: view)
         win.orderFront(nil)

@@ -5,10 +5,10 @@ import AppKit
 /// `NSWindow.performDrag(with:)` API instead of SwiftUI's `DragGesture`.
 ///
 /// Why: `DragGesture.onChanged { setFrameOrigin(...) }` runs the position
-/// update on the SwiftUI event clock and competes with Rive's Metal render
-/// loop for the main thread, producing a stuttery drag. `performDrag` hands
-/// the move off to the macOS window server, which moves the window
-/// frame-perfectly at the display's refresh rate.
+/// update on the SwiftUI event clock and can compete with rendering work on
+/// the main thread, producing a stuttery drag. `performDrag` hands the move
+/// off to the macOS window server, which moves the window frame-perfectly at
+/// the display's refresh rate.
 ///
 /// Also handles tap detection: if the cursor doesn't move beyond
 /// `dragSlop` between mouseDown and mouseUp, we treat it as a click and

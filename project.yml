@@ -9,9 +9,6 @@ packages:
   GRDB:
     url: https://github.com/groue/GRDB.swift
     from: 6.29.0
-  RiveRuntime:
-    url: https://github.com/rive-app/rive-ios
-    exactVersion: 6.7.1
 
 targets:
   Dogbody:
@@ -25,7 +22,6 @@ targets:
         buildPhase: none
     dependencies:
       - package: GRDB
-      - package: RiveRuntime
     info:
       path: Dogbody/Info.plist
       properties:
