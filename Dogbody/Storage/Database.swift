@@ -231,37 +231,6 @@ final class Store: ObservableObject {
         openTodoCountToday() == 0
     }
 
-    /// Total number of TODOs that are still open, regardless of when created.
-    /// Used by the menu bar status line ("还剩 N 件") so the user sees the
-    /// whole backlog, not just today's.
-    func openTodoCount() -> Int {
-        (try? dbQueue.read { db in
-            try Todo
-                .filter(Todo.Columns.doneAt == nil)
-                .fetchCount(db)
-        }) ?? 0
-    }
-
-    /// Number of "moves" the user made today: entries written today plus
-    /// todos completed today. Drives the menu bar's "今天 · N 笔" line.
-    func todayActivityCount() -> Int {
-        let cal = Calendar.current
-        let dayStart = cal.startOfDay(for: Date()).timeIntervalSince1970
-        let dayEnd = (cal.date(byAdding: .day, value: 1, to: cal.startOfDay(for: Date())) ?? Date()).timeIntervalSince1970
-        return (try? dbQueue.read { db in
-            let entries = try Entry
-                .filter(Entry.Columns.createdAt >= dayStart)
-                .filter(Entry.Columns.createdAt < dayEnd)
-                .fetchCount(db)
-            let donesToday = try Todo
-                .filter(Todo.Columns.doneAt != nil)
-                .filter(Todo.Columns.doneAt >= dayStart)
-                .filter(Todo.Columns.doneAt < dayEnd)
-                .fetchCount(db)
-            return entries + donesToday
-        }) ?? 0
-    }
-
     private func bumpRevision() {
         DispatchQueue.main.async { [weak self] in
             self?.revision &+= 1

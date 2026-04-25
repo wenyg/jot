@@ -1,7 +1,7 @@
 import AppKit
 import SwiftUI
 
-final class PetWindowController: NSObject {
+final class PetWindowController: NSObject, ObservableObject {
     private var window: PetWindow?
     private var inputController: QuickInputPanelController?
 
@@ -13,6 +13,10 @@ final class PetWindowController: NSObject {
     var onOpenRequested: (() -> Void)?
     /// Called after the quick input panel closes.
     var onPanelClosed: (() -> Void)?
+
+    /// Mirrors `isVisible` but published so SwiftUI menus can re-render their
+    /// label ("显示 Jot" / "隐藏 Jot") without polling.
+    @Published private(set) var isShown: Bool = false
 
     var isVisible: Bool { window?.isVisible ?? false }
 
@@ -27,6 +31,7 @@ final class PetWindowController: NSObject {
     func show() {
         if let win = window {
             win.orderFront(nil)
+            isShown = true
             return
         }
         let size = CGSize(width: 160, height: 170)
@@ -60,11 +65,13 @@ final class PetWindowController: NSObject {
         )
 
         self.window = win
+        isShown = true
     }
 
     func hide() {
         window?.orderOut(nil)
         window = nil
+        isShown = false
     }
 
     func toggle() {

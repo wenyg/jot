@@ -26,7 +26,7 @@ struct QuickInputView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
+        ZStack {
             // The bubble itself — material + hairline outline, drawn once
             // through a custom Shape so the tail is part of the same blob.
             BubbleShape(tailCenterX: tailCenterX, tailOnTop: tailOnTop)
@@ -37,41 +37,49 @@ struct QuickInputView: View {
                 )
                 .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
 
-            TextField("记点什么", text: $text)
-                .textFieldStyle(.plain)
-                .font(.system(size: 15))
-                .focused($focused)
-                .onSubmit(submit)
-                .onChange(of: text) { _ in
-                    manualOverride = nil
-                }
-                .padding(.horizontal, 18)
-                .padding(.top, tailOnTop ? BubbleShape.tailHeight + 14 : 14)
-                .padding(.bottom, tailOnTop ? 14 : BubbleShape.tailHeight + 14)
-
-            // Tiny pill in the corner — a quiet whisper, not a banner.
-            // Only appears once the user has typed something to classify.
-            if !text.isEmpty {
+            // Pill (left) + TextField (right). The pill is always visible so
+            // the default classification ("记一笔") is announced upfront and
+            // Tab-to-toggle is discoverable. Tab is intercepted at the panel
+            // level — see `QuickInputPanelController.installKeyMonitor` —
+            // because TextField swallows Tab before SwiftUI shortcuts run.
+            HStack(spacing: 10) {
                 Button(action: toggleKind) {
-                    HStack(spacing: 4) {
+                    HStack(spacing: 6) {
                         Circle()
                             .fill(kindTint)
-                            .frame(width: 5, height: 5)
+                            .frame(width: 7, height: 7)
                         Text(kindLabel)
-                            .font(.system(size: 9, weight: .semibold))
-                            .foregroundStyle(.secondary)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(.primary.opacity(0.78))
                     }
-                    .padding(.horizontal, 5)
-                    .padding(.vertical, 2)
-                    .contentShape(Rectangle())
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 4)
+                    .background(
+                        Capsule().fill(kindTint.opacity(0.14))
+                    )
+                    .contentShape(Capsule())
                 }
                 .buttonStyle(.plain)
-                .keyboardShortcut(.tab, modifiers: [])
-                .padding(.trailing, 12)
-                .padding(.bottom, tailOnTop ? 6 : BubbleShape.tailHeight + 6)
-                .help("Tab 切换 TODO / 日志")
-                .transition(.opacity)
+                .help("Tab 切换 TODO / 记一笔")
+
+                TextField("记点什么", text: $text)
+                    .textFieldStyle(.plain)
+                    .font(.system(size: 15))
+                    .focused($focused)
+                    .onSubmit(submit)
+                    .onChange(of: text) { newValue in
+                        // Only reset the manual Tab override when the user
+                        // clears the field entirely (i.e. starts over). While
+                        // there is still text, an explicit Tab choice wins
+                        // over live keyword-based reclassification.
+                        if newValue.isEmpty {
+                            manualOverride = nil
+                        }
+                    }
             }
+            .padding(.horizontal, 14)
+            .padding(.top, tailOnTop ? BubbleShape.tailHeight + 12 : 12)
+            .padding(.bottom, tailOnTop ? 12 : BubbleShape.tailHeight + 12)
         }
         .padding(2)
         .onAppear {
@@ -80,7 +88,9 @@ struct QuickInputView: View {
             }
         }
         .onExitCommand { onCancel() }
-        .animation(.easeOut(duration: 0.12), value: text.isEmpty)
+        .onReceive(NotificationCenter.default.publisher(for: .quickInputToggleKind)) { _ in
+            toggleKind()
+        }
     }
 
     private func submit() {
@@ -101,7 +111,7 @@ struct QuickInputView: View {
     private var kindLabel: String {
         switch effectiveKind {
         case .todo: return "TODO"
-        case .entry: return "日志"
+        case .entry: return "记一笔"
         }
     }
 

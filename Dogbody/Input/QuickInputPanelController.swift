@@ -9,12 +9,19 @@ final class QuickInputPanel: NSPanel {
     override var acceptsFirstResponder: Bool { true }
 }
 
+extension Notification.Name {
+    /// Posted by the panel controller when the user presses Tab inside the
+    /// quick-input bubble. Caught by `QuickInputView` to flip TODO ↔ 记一笔.
+    static let quickInputToggleKind = Notification.Name("io.github.wenyg.jot.quickInputToggleKind")
+}
+
 /// Owns the speech-bubble panel that appears next to the pet. The panel is
 /// sized to include a small tail; the tail's tip is always positioned over
 /// the pet, even when the bubble itself has to slide along the screen edge
 /// to stay on-screen.
 final class QuickInputPanelController: NSObject, NSWindowDelegate {
     private var panel: QuickInputPanel?
+    private var keyMonitor: Any?
 
     var onSubmit: ((String, ParsedInput.Kind?) -> Void)?
     var onDismiss: (() -> Void)?
@@ -71,13 +78,43 @@ final class QuickInputPanelController: NSObject, NSWindowDelegate {
         panel.makeKeyAndOrderFront(nil)
 
         self.panel = panel
+        installKeyMonitor()
     }
 
     func hide() {
         guard panel != nil else { return }
+        removeKeyMonitor()
         panel?.orderOut(nil)
         panel = nil
         onDismiss?()
+    }
+
+    // MARK: - Tab key interception
+    //
+    // SwiftUI's `Button.keyboardShortcut(.tab)` does NOT fire while a SwiftUI
+    // `TextField` holds first-responder focus, because AppKit's text input
+    // pipeline consumes Tab first as "go to next key view". To classify on
+    // Tab anyway, install a panel-scoped local key monitor that swallows the
+    // event and posts a notification the SwiftUI view picks up.
+
+    private func installKeyMonitor() {
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            guard let self, self.panel?.isKeyWindow == true else { return event }
+            // 48 = Tab keycode. Only fire on a bare Tab — let ⇧⌘⌃⌥-Tab through.
+            let bareModifiers = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+            if event.keyCode == 48 && bareModifiers.isEmpty {
+                NotificationCenter.default.post(name: .quickInputToggleKind, object: self)
+                return nil
+            }
+            return event
+        }
+    }
+
+    private func removeKeyMonitor() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
+        }
     }
 
     func reposition(near petFrame: CGRect) {

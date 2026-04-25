@@ -2,80 +2,51 @@ import SwiftUI
 import AppKit
 
 /// Menu bar dropdown. The pet on the desktop is the *only* place to record;
-/// everything else lives here as a small, calm list of verbs.
+/// this menu is the calm cabinet where the rest of the app lives.
 struct MenuBarContent: View {
     @Environment(\.openWindow) private var openWindow
-    @ObservedObject private var store = Store.shared
+    @ObservedObject var petController: PetWindowController
 
     var body: some View {
-        Text(statusLine)
+        Button("回顾今日") { openRiver() }
 
-        Divider()
-
-        Button("打开时间流") { openWindow(id: WindowID.river) }
-        Button(copyButtonLabel) { copyThisWeek() }
-
-        Divider()
-
-        Button("显示桌面伙伴") {
-            AppDelegate.shared?.petController.toggle()
+        Button(petController.isShown ? "隐藏 Jot" : "显示 Jot") {
+            petController.toggle()
         }
-        Button("设置…") { openWindow(id: WindowID.settings) }
+
+        Button("设置…") { openSettings() }
 
         Divider()
 
         Button("退出 Jot") { NSApp.terminate(nil) }
     }
 
-    // MARK: - Status
-
-    /// "今天 · 3 笔 · 还剩 2 件" — a soft pulse that tells you what your day
-    /// looks like before you do anything else.
-    private var statusLine: String {
-        // Re-read on each open so revisions to `store.revision` keep this fresh.
-        _ = store.revision
-        let activity = Store.shared.todayActivityCount()
-        let open = Store.shared.openTodoCount()
-
-        switch (activity, open) {
-        case (0, 0):
-            return "今天还没动笔"
-        case (let a, 0):
-            return "今天 · \(a) 笔"
-        case (0, let o):
-            return "今天还没动笔 · 还剩 \(o) 件"
-        case (let a, let o):
-            return "今天 · \(a) 笔 · 还剩 \(o) 件"
-        }
+    /// LSUIElement apps don't auto-front their windows when `openWindow` is
+    /// invoked from a menu — the window is created behind whatever the user
+    /// was looking at. Activate the app, then nudge the window to the front
+    /// once SwiftUI has had a chance to actually create it.
+    private func openRiver() {
+        NSApp.activate(ignoringOtherApps: true)
+        openWindow(id: WindowID.river)
+        bringToFront(sceneId: WindowID.river, title: "Jot")
     }
 
-    // MARK: - Copy this week
-
-    /// On Mondays, RiverView's `.week` automatically refers to the *previous*
-    /// Mon–Sun (since Monday morning's "本周" is empty and what users actually
-    /// want is the just-finished week's report). Mirror that label here.
-    private var copyButtonLabel: String {
-        let weekday = Calendar.current.component(.weekday, from: Date())
-        return weekday == 2 ? "复制上周" : "复制本周"
+    private func openSettings() {
+        NSApp.activate(ignoringOtherApps: true)
+        openWindow(id: WindowID.settings)
+        bringToFront(sceneId: WindowID.settings, title: "设置")
     }
 
-    private func copyThisWeek() {
-        let summary = WeeklySummary.build(scope: .week)
-        guard !summary.markdown.isEmpty else {
-            // Nothing to copy — let the pet think for a beat as soft feedback.
-            AppDelegate.shared?.animator.set(.thinking)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
-                AppDelegate.shared?.animator.set(.idle)
-            }
-            return
-        }
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(summary.markdown, forType: .string)
-
-        // Pet wags its tail as a wordless "done".
-        AppDelegate.shared?.animator.set(.happy)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-            AppDelegate.shared?.animator.set(.idle)
+    /// Bring the SwiftUI scene window to the front. Done on the next runloop
+    /// tick because `openWindow` may schedule the actual NSWindow creation
+    /// asynchronously. Match by SwiftUI scene id first (current SwiftUI sets
+    /// it as the window identifier) and fall back to window title for safety
+    /// across SwiftUI versions.
+    private func bringToFront(sceneId: String, title: String) {
+        DispatchQueue.main.async {
+            let win = NSApp.windows.first(where: { $0.identifier?.rawValue == sceneId })
+                ?? NSApp.windows.first(where: { $0.title == title })
+            win?.makeKeyAndOrderFront(nil)
         }
     }
 }

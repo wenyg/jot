@@ -6,7 +6,7 @@ struct DogbodyApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarContent()
+            MenuBarContent(petController: appDelegate.petController)
         } label: {
             Image(systemName: "pawprint.fill")
         }

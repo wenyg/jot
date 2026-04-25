@@ -1,0 +1,51 @@
+---
+description: After any Swift code change, build AND relaunch the app yourself; never ask the user to build in Xcode.
+alwaysApply: true
+---
+
+# Always Build + Relaunch After Code Changes
+
+When you modify any Swift file in this project, you MUST do the full build → kill → launch cycle before handing the turn back to the user. A successful build alone is not enough: any already-running `Dogbody.app` instance keeps running the *old* binary, so the user won't see your fix until you relaunch.
+
+## The full cycle
+
+Run from the repo root, in this order:
+
+### 1) Build to a fixed path we own
+
+```bash
+xcodebuild -project Dogbody.xcodeproj -scheme Dogbody -configuration Debug \
+  -derivedDataPath .build/derived \
+  CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO CODE_SIGNING_ALLOWED=NO build \
+  2>&1 | rg "BUILD|error:|warning:" | rg -v "xcodebuild: WARNING"
+```
+
+The grep filter keeps output short: only `BUILD SUCCEEDED` / `BUILD FAILED`, errors, and real warnings (excluding xcodebuild's own destination chatter). Do NOT use Xcode's `~/Library/Developer/Xcode/DerivedData/...` path — Xcode will clobber it on its own builds.
+
+If `project.yml` was edited, regenerate first: `xcodegen generate`.
+
+### 2) Kill any running instance (Xcode-launched or otherwise)
+
+```bash
+pkill -9 -f "Dogbody.app/Contents/MacOS/Dogbody" 2>/dev/null; sleep 1
+```
+
+There may be a Xcode-launched binary at `~/Library/Developer/Xcode/DerivedData/Dogbody-<hash>/Build/Products/Debug/Dogbody.app/...`. Kill it too — `pkill` matches all of them.
+
+### 3) Launch the freshly built version
+
+```bash
+open .build/derived/Build/Products/Debug/Dogbody.app
+sleep 1
+pgrep -lf "Dogbody.app/Contents/MacOS"
+```
+
+The `pgrep` line confirms the new process is running and shows the path — verify it points to `.build/derived/...`, not Xcode's DerivedData.
+
+## Rules
+
+- Run the full cycle (build → kill → launch) at the end of every code change, before responding.
+- If the build fails, fix it before reporting back. Don't hand a broken build to the user.
+- If the build only emits real warnings (not the `xcodebuild: WARNING: Using the first of multiple matching destinations` line), surface them in your reply.
+- Don't run `./scripts/build.sh` — it has a `set -u` + empty-array bug; call `xcodebuild` directly.
+- A common failure mode: build succeeds, but the user is still looking at an old running instance. ALWAYS kill + relaunch, even if you "just did it last turn."
