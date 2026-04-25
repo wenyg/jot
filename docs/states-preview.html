@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>Jot — 宠物状态预览</title>
+<style>
+  :root {
+    --bg: #f6f5f1;
+    --card: #ffffff;
+    --ink: #1c1c1e;
+    --muted: #8e8e93;
+    --line: rgba(0, 0, 0, 0.06);
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text",
+                 "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page {
+    width: max-content;
+    margin: 0 auto;
+    padding: 24px 20px 28px;
+  }
+
+  header h1 {
+    margin: 0 0 4px;
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  header p {
+    margin: 0 0 20px;
+    color: var(--muted);
+    font-size: 13px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, max-content);
+    gap: 4px;
+  }
+
+  .card {
+    margin: 0; /* figure has a default 1em/40px margin in user-agent CSS */
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 10px 8px 8px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .pet {
+    width: 144px;
+    height: 152px;
+    object-fit: contain;
+    image-rendering: -webkit-optimize-contrast;
+  }
+
+  .label {
+    margin-top: 6px;
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+
+  .meta {
+    margin-top: 1px;
+    font-size: 10px;
+    color: var(--muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+
+  /* 整组截图: 浏览器窗口宽 ~900, 高 ~480 即可一屏装下. */
+</style>
+</head>
+<body>
+  <div class="page">
+    <header>
+      <h1>Jot — 桌宠状态</h1>
+      <p>角落的小狗在不同时刻会切到不同状态. 下面是它的全部表情.</p>
+    </header>
+
+    <section class="grid">
+      <figure class="card">
+        <img class="pet" src="../Dogbody/Pet/DogAssets/dog_idle.png" alt="idle" />
+        <figcaption class="label">待机</figcaption>
+        <div class="meta">idle</div>
+      </figure>
+      <figure class="card">
+        <img class="pet" src="../Dogbody/Pet/DogAssets/dog_hover.png" alt="hover" />
+        <figcaption class="label">鼠标悬停</figcaption>
+        <div class="meta">hover</div>
+      </figure>
+      <figure class="card">
+        <img class="pet" src="../Dogbody/Pet/DogAssets/dog_dragging.png" alt="dragging" />
+        <figcaption class="label">被拖动</figcaption>
+        <div class="meta">dragging</div>
+      </figure>
+      <figure class="card">
+        <img class="pet" src="../Dogbody/Pet/DogAssets/dog_thinking.png" alt="thinking" />
+        <figcaption class="label">思考中</figcaption>
+        <div class="meta">thinking</div>
+      </figure>
+
+      <figure class="card">
+        <img class="pet" src="../Dogbody/Pet/DogAssets/dog_happy.png" alt="happy" />
+        <figcaption class="label">开心</figcaption>
+        <div class="meta">happy</div>
+      </figure>
+      <figure class="card">
+        <img class="pet" src="../Dogbody/Pet/DogAssets/dog_celebrate.png" alt="celebrate" />
+        <figcaption class="label">记一笔成功</figcaption>
+        <div class="meta">celebrate</div>
+      </figure>
+      <figure class="card">
+        <img class="pet" src="../Dogbody/Pet/DogAssets/dog_remind.png" alt="remind" />
+        <figcaption class="label">每日提醒</figcaption>
+        <div class="meta">remind</div>
+      </figure>
+      <figure class="card">
+        <img class="pet" src="../Dogbody/Pet/DogAssets/dog_sleep.png" alt="sleep" />
+        <figcaption class="label">睡着了</figcaption>
+        <div class="meta">sleep</div>
+      </figure>
+    </section>
+  </div>
+</body>
+</html>
