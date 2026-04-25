@@ -9,6 +9,10 @@ final class QuickInputPanel: NSPanel {
     override var acceptsFirstResponder: Bool { true }
 }
 
+/// Owns the speech-bubble panel that appears next to the pet. The panel is
+/// sized to include a small tail; the tail's tip is always positioned over
+/// the pet, even when the bubble itself has to slide along the screen edge
+/// to stay on-screen.
 final class QuickInputPanelController: NSObject, NSWindowDelegate {
     private var panel: QuickInputPanel?
 
@@ -16,20 +20,30 @@ final class QuickInputPanelController: NSObject, NSWindowDelegate {
     var onDismiss: (() -> Void)?
     var isVisible: Bool { panel?.isVisible ?? false }
 
-    private let panelSize = CGSize(width: 480, height: 72)
+    /// Bubble width and total panel height (body + tail).
+    private let bubbleWidth: CGFloat = 460
+    private let bubbleBodyHeight: CGFloat = 60
+    private var totalHeight: CGFloat { bubbleBodyHeight + BubbleShape.tailHeight }
+    private var panelSize: CGSize { CGSize(width: bubbleWidth, height: totalHeight) }
+
+    /// Vertical breathing room between the pet's edge and the tail tip.
+    private let tipGap: CGFloat = 6
 
     func show(near petFrame: CGRect) {
-        let rect = frame(near: petFrame)
+        let layout = layout(near: petFrame)
 
         let panel = QuickInputPanel(
-            contentRect: rect,
+            contentRect: layout.rect,
             styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
         panel.isOpaque = false
         panel.backgroundColor = .clear
-        panel.hasShadow = true
+        // The bubble is a non-rectangular Shape, so the system shadow (which
+        // shadows the panel rectangle) would betray its corners. Use SwiftUI's
+        // own shadow inside `QuickInputView` instead.
+        panel.hasShadow = false
         panel.level = .floating
         panel.isFloatingPanel = true
         panel.becomesKeyOnlyIfNeeded = false
@@ -44,7 +58,9 @@ final class QuickInputPanelController: NSObject, NSWindowDelegate {
             },
             onCancel: { [weak self] in
                 self?.hide()
-            }
+            },
+            tailCenterX: layout.tailCenterX,
+            tailOnTop: layout.tailOnTop
         )
         panel.contentView = NSHostingView(rootView: view)
 
@@ -66,19 +82,57 @@ final class QuickInputPanelController: NSObject, NSWindowDelegate {
 
     func reposition(near petFrame: CGRect) {
         guard let panel else { return }
-        panel.setFrame(frame(near: petFrame), display: true, animate: false)
+        // Only follow the pet's position with the panel frame. Replacing the
+        // SwiftUI view here would reset @State (the in-progress TextField
+        // contents) — and reposition is called on every pet drag tick. The
+        // tail will be momentarily off-target while the user is dragging the
+        // pet *with the bubble already open*, which in practice is never.
+        let layout = layout(near: petFrame)
+        panel.setFrame(layout.rect, display: true, animate: false)
     }
 
-    private func frame(near petFrame: CGRect) -> CGRect {
+    // MARK: - Layout
+
+    private struct BubbleLayout {
+        let rect: CGRect
+        /// Tail's horizontal position in *view coordinates* (0 = panel left).
+        let tailCenterX: CGFloat
+        /// `true` if tail is at the top of the view (bubble is below the pet).
+        let tailOnTop: Bool
+    }
+
+    private func layout(near petFrame: CGRect) -> BubbleLayout {
         let screen = NSScreen.main?.visibleFrame ?? .zero
-        var x = petFrame.midX - panelSize.width / 2
-        var y = petFrame.maxY + 10
-        // Flip below pet if there isn't room above.
-        if y + panelSize.height > screen.maxY - 20 {
-            y = petFrame.minY - panelSize.height - 10
+        let size = panelSize
+
+        // SwiftUI inside the panel uses top-left coords (y grows down) but
+        // an NSWindow frame uses macOS bottom-up coords. The panel's
+        // `frame.minY` is therefore the *bottom* edge of the SwiftUI canvas,
+        // i.e. where the tail tip sits when the tail is at the SwiftUI bottom.
+        //
+        // Default placement: bubble *above* the pet, tail pointing down.
+        // We want the tail tip to sit just above the pet → panel.minY = petFrame.maxY + tipGap.
+        var tailOnTop = false
+        var originY = petFrame.maxY + tipGap
+
+        // If the bubble would overflow the top of the screen, flip below the pet.
+        // Tail-up case: tail tip is at view y=0, which is panel.maxY in screen
+        // coords. We want tip just below the pet → panel.maxY = petFrame.minY - tipGap.
+        if originY + size.height > screen.maxY - 12 {
+            tailOnTop = true
+            originY = petFrame.minY - tipGap - size.height
         }
-        x = max(screen.minX + 8, min(x, screen.maxX - panelSize.width - 8))
-        return CGRect(x: x, y: y, width: panelSize.width, height: panelSize.height)
+
+        // Horizontally, center the bubble on the pet, then clamp to screen.
+        let desiredX = petFrame.midX - size.width / 2
+        let originX = max(screen.minX + 8, min(desiredX, screen.maxX - size.width - 8))
+
+        let rect = CGRect(x: originX, y: originY, width: size.width, height: size.height)
+
+        // Tail X in view coords: where the pet's center falls within the view.
+        // After horizontal clamping the bubble may have shifted, so we recompute.
+        let tailX = petFrame.midX - originX
+        return BubbleLayout(rect: rect, tailCenterX: tailX, tailOnTop: tailOnTop)
     }
 
     // MARK: - NSWindowDelegate

@@ -158,17 +158,6 @@ struct RiverView: View {
             }
             .menuStyle(.button)
             .fixedSize()
-            .background(
-                // Hidden button to expose ⌘C as a window-level shortcut.
-                // SwiftUI's Menu doesn't accept .keyboardShortcut directly on macOS,
-                // so we hang it off an off-screen Button.
-                Button("Copy") { copyMarkdown() }
-                    .keyboardShortcut("c", modifiers: .command)
-                    .opacity(0)
-                    .allowsHitTesting(false)
-                    .frame(width: 0, height: 0)
-                    .accessibilityHidden(true)
-            )
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
@@ -283,7 +272,7 @@ struct RiverView: View {
             Text("这段时间还没记录什么")
                 .font(.headline)
                 .foregroundStyle(.secondary)
-            Text("点桌面上的小狗, 或按 ⌘⇧P, 记一笔")
+            Text("点桌面上的小狗, 记一笔")
                 .font(.system(size: 12))
                 .foregroundStyle(.secondary.opacity(0.8))
         }
