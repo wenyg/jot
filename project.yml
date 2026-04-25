@@ -1,7 +1,7 @@
 name: Dogbody
 options:
   deploymentTarget:
-    macOS: "13.0"
+    macOS: "13.1"
   createIntermediateGroups: true
   groupSortPosition: top
 
@@ -9,6 +9,9 @@ packages:
   GRDB:
     url: https://github.com/groue/GRDB.swift
     from: 6.29.0
+  RiveRuntime:
+    url: https://github.com/rive-app/rive-ios
+    exactVersion: 6.7.1
 
 targets:
   Dogbody:
@@ -22,6 +25,7 @@ targets:
         buildPhase: none
     dependencies:
       - package: GRDB
+      - package: RiveRuntime
     info:
       path: Dogbody/Info.plist
       properties:
@@ -30,7 +34,7 @@ targets:
         CFBundleShortVersionString: "0.2.0"
         CFBundleVersion: "2"
         LSUIElement: true
-        LSMinimumSystemVersion: "13.0"
+        LSMinimumSystemVersion: "13.1"
         NSHumanReadableCopyright: "Copyright (c) 2026 Jot"
         NSSupportsAutomaticTermination: false
         NSSupportsSuddenTermination: false
@@ -38,7 +42,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.dogbody.Dogbody
         SWIFT_VERSION: "5.9"
-        MACOSX_DEPLOYMENT_TARGET: "13.0"
+        MACOSX_DEPLOYMENT_TARGET: "13.1"
         GENERATE_INFOPLIST_FILE: NO
         ENABLE_HARDENED_RUNTIME: YES
         CODE_SIGN_STYLE: Automatic

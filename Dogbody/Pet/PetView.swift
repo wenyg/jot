@@ -1,139 +1,102 @@
 import SwiftUI
 import AppKit
 
-/// Single-sprite pet: one PNG, all state differences expressed through
-/// transform animations (scale / rotation / offset). No emoji stickers,
-/// no thought bubbles, no "Z" decals — the design IS the typography.
+/// Thin shell around the pet renderer. Owns:
+///   • drag/tap/hover dispatch (handled by the AppKit `PetDragHandle` overlay
+///     for buttery-smooth window dragging via `NSWindow.performDrag`)
+///   • cursor position tracking for pupil follow
+///   • renderer selection (Rive vs the hand-drawn SwiftUI "Yuumi" cat)
+///
+/// All actual drawing lives in `RivePetView` (default) or `CatView`.
 struct PetView: View {
     @ObservedObject var animator: PetAnimator
     let onTap: () -> Void
     let getWindow: () -> NSWindow?
 
-    @State private var dragStartOrigin: NSPoint?
-    @State private var didDrag = false
+    @State private var cursorTrackingTimer: Timer?
 
-    private let petSize: CGFloat = 96
+    /// Logical size of the cat's drawable frame (points). Must be large
+    /// enough to hold the silhouette (which is bodyWidth × 1.18) plus some
+    /// headroom above for accessories (z / sparkles / …) and extra to the
+    /// right for tail flicks. Matches the PetWindow contentRect created in
+    /// PetWindowController.
+    private let frameWidth: CGFloat = 160
+    private let frameHeight: CGFloat = 170
+
+    /// Renderer to use. Defaults to Rive (the high-fidelity .riv file). Falls
+    /// back to the original SwiftUI vector "Yuumi" build for users who set
+    /// `defaults write com.dogbody.Dogbody pet.useRive -bool false`.
+    private var useRive: Bool {
+        // Treat the key as opt-out: anything other than an explicit `false`
+        // means use Rive. Lets us ship Rive as the new default but keep the
+        // hand-drawn cat as a one-flag escape hatch.
+        let v = UserDefaults.standard.object(forKey: "pet.useRive")
+        if let b = v as? Bool { return b }
+        if let n = v as? NSNumber { return n.boolValue }
+        return true
+    }
+
+    @ViewBuilder
+    private var petBody: some View {
+        if useRive {
+            RivePetView(animator: animator, fileName: RivePetCatalog.active)
+        } else {
+            CatView(animator: animator, catScreenOrigin: currentScreenOrigin())
+        }
+    }
 
     var body: some View {
         ZStack {
-            Color.clear
-            Image("pet")
-                .resizable()
-                .interpolation(.high)
-                .aspectRatio(contentMode: .fit)
-                .frame(width: petSize, height: petSize)
-                .opacity(bodyOpacity)
-                .scaleEffect(x: bodyScaleX, y: bodyScaleY, anchor: .bottom)
-                .rotationEffect(.degrees(bodyTilt), anchor: .bottom)
-                .offset(x: bodyOffsetX, y: bodyOffsetY)
-                .animation(.easeInOut(duration: 0.18), value: animator.frame)
-                .animation(.easeInOut(duration: 0.3), value: animator.state)
-                .shadow(color: .black.opacity(0.25), radius: 6, x: 0, y: 3)
-        }
-        .frame(width: petSize + 24, height: petSize + 24)
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 0)
-                .onChanged { value in
-                    if dragStartOrigin == nil, let win = getWindow() {
-                        dragStartOrigin = win.frame.origin
-                    }
-                    if abs(value.translation.width) > 3 || abs(value.translation.height) > 3 {
-                        didDrag = true
-                    }
-                    if let start = dragStartOrigin, let win = getWindow() {
-                        let newOrigin = NSPoint(
-                            x: start.x + value.translation.width,
-                            y: start.y - value.translation.height
-                        )
-                        win.setFrameOrigin(newOrigin)
-                    }
-                }
-                .onEnded { _ in
-                    if !didDrag { onTap() }
+            petBody
+            // Native AppKit overlay handles drag via NSWindow.performDrag,
+            // which is far smoother than SwiftUI's DragGesture + setFrameOrigin
+            // because the window server runs the move off-thread from Rive's
+            // Metal render loop.
+            PetDragHandle(
+                onTap: {
+                    onTap()
                     animator.touch()
-                    dragStartOrigin = nil
-                    didDrag = false
+                },
+                onDragBegan: {
+                    animator.isBeingDragged = true
+                },
+                onDragEnded: {
+                    animator.touch()
+                    animator.isBeingDragged = false
+                },
+                onHoverChange: { hovering in
+                    animator.isHovering = hovering
+                    if hovering { startCursorTracking() }
+                    else        { stopCursorTracking() }
                 }
-        )
+            )
+        }
+        .frame(width: frameWidth, height: frameHeight)
+        .onAppear { startCursorTracking() }
+        .onDisappear { stopCursorTracking() }
         .help("点我记一笔, 拖我换位置")
     }
 
-    // MARK: - Per-state transforms
+    // MARK: - Cursor tracking
 
-    /// Vertical scale with bottom anchor (so breathing feels like a belly-rise,
-    /// not a head-rise).
-    private var bodyScaleY: CGFloat {
-        let f = animator.frame
-        switch animator.state {
-        case .idle:
-            return [1.000, 1.025, 1.015, 0.995][f % 4]
-        case .happy:
-            return [1.05, 1.12, 1.08, 1.10][f % 4]
-        case .thinking:
-            return [1.000, 1.015, 1.000, 1.015][f % 4]
-        case .sleep:
-            // A long, slow exhale. Pet is "lying down" → squashed vertically.
-            return [0.56, 0.58, 0.57][f % 3]
-        case .celebrate:
-            return [1.00, 1.25, 1.00, 1.25, 1.05][f % 5]
-        case .remind:
-            return [1.00, 1.06, 1.00, 1.06][f % 4]
+    /// We sample `NSEvent.mouseLocation` at 30 Hz while the cursor is near
+    /// (or over) the pet. Cheaper than installing a global monitor and good
+    /// enough to look "alive".
+    private func startCursorTracking() {
+        guard cursorTrackingTimer == nil else { return }
+        cursorTrackingTimer = Timer.scheduledTimer(withTimeInterval: 1.0 / 30.0, repeats: true) { _ in
+            let screenPoint = NSEvent.mouseLocation
+            animator.cursorScreenPoint = screenPoint
         }
     }
 
-    private var bodyScaleX: CGFloat {
-        switch animator.state {
-        case .sleep: return 1.18  // splayed out while asleep
-        case .celebrate: return 1.0
-        default: return 1.0
-        }
+    private func stopCursorTracking() {
+        cursorTrackingTimer?.invalidate()
+        cursorTrackingTimer = nil
+        animator.cursorScreenPoint = nil
     }
 
-    private var bodyTilt: Double {
-        let f = animator.frame
-        switch animator.state {
-        case .celebrate:
-            return [-8, 8, -10, 10, -4, 4][f % 6]
-        case .remind:
-            // Gentle head-tilt left-right — "hey, I'm here."
-            return [-10, 10, -10, 10][f % 4]
-        case .happy:
-            return [-3, 3, -2, 2][f % 4]
-        case .thinking:
-            return [0, 4, 0, -4][f % 4]
-        case .sleep:
-            return 90  // lying on its side
-        default:
-            return 0
-        }
-    }
-
-    private var bodyOffsetX: CGFloat {
-        switch animator.state {
-        case .sleep: return -4
-        default: return 0
-        }
-    }
-
-    private var bodyOffsetY: CGFloat {
-        let f = animator.frame
-        switch animator.state {
-        case .idle:
-            return [0, -1.5, 0, 1][f % 4]
-        case .sleep:
-            return 14  // settled onto the ground
-        case .celebrate:
-            return [0, -10, 0, -8, 0][f % 5]
-        default:
-            return 0
-        }
-    }
-
-    private var bodyOpacity: Double {
-        switch animator.state {
-        case .sleep: return 0.75
-        default: return 1.0
-        }
+    private func currentScreenOrigin() -> CGPoint {
+        getWindow()?.frame.origin ?? .zero
     }
 }

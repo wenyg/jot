@@ -29,7 +29,7 @@ final class PetWindowController: NSObject {
             win.orderFront(nil)
             return
         }
-        let size = CGSize(width: 120, height: 120)
+        let size = CGSize(width: 160, height: 170)
         guard let screen = NSScreen.main else { return }
         let visible = screen.visibleFrame
         let savedX = UserDefaults.standard.object(forKey: "pet.origin.x") as? CGFloat
