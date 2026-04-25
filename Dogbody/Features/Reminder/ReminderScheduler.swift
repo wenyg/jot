@@ -63,7 +63,7 @@ final class ReminderScheduler {
             }
             NotificationManager.shared.schedule(
                 id: r.id,
-                title: "Dogbody 提醒",
+                title: "Jot 提醒",
                 body: body,
                 fireAt: r.fireDate
             )

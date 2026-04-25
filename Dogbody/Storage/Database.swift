@@ -20,9 +20,9 @@ final class Store: ObservableObject {
             appropriateFor: nil,
             create: true
         )
-        let dir = appSupport.appendingPathComponent("Dogbody", isDirectory: true)
+        let dir = appSupport.appendingPathComponent("Jot", isDirectory: true)
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
-        let dbURL = dir.appendingPathComponent("dogbody.sqlite")
+        let dbURL = dir.appendingPathComponent("jot.sqlite")
 
         var config = Configuration()
         config.prepareDatabase { db in
@@ -67,7 +67,7 @@ final class Store: ObservableObject {
                     try rem.insert(db)
                     NotificationManager.shared.schedule(
                         id: rem.id,
-                        title: "Dogbody 提醒",
+                        title: "Jot 提醒",
                         body: todo.content,
                         fireAt: due
                     )

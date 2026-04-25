@@ -74,7 +74,7 @@ struct SettingsView: View {
             appropriateFor: nil,
             create: false
         ) else { return }
-        let dir = appSupport.appendingPathComponent("Dogbody", isDirectory: true)
+        let dir = appSupport.appendingPathComponent("Jot", isDirectory: true)
         NSWorkspace.shared.open(dir)
     }
 }
