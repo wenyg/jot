@@ -200,20 +200,23 @@ struct WeeklySummary {
     let markdown: String
 
     static func build(scope: RiverView.Scope) -> WeeklySummary {
-        let (start, _) = range(for: scope)
+        let start = RiverView.startDate(for: scope)
+        let end = RiverView.endDate(for: scope)
         let cal = Calendar.current
-        let now = Date()
 
-        let todos = Store.shared.todos(since: start)
-        let entries = Store.shared.entries(since: start)
+        let todos = Store.shared.todos(since: start, until: end)
+        let entries = Store.shared.entries(since: start, until: end)
         let completed = todos.filter { $0.isDone }
 
         let titleFmt = DateFormatter()
         titleFmt.locale = Locale(identifier: "zh_CN")
         titleFmt.dateFormat = "M月d日"
-        let rangeLabel = "\(titleFmt.string(from: start)) — \(titleFmt.string(from: now))"
+        // end 是 exclusive 上界 (例: 上周场景下 end = 今天 0:00, 应显示上周日).
+        // 减 1 秒后取所在那一天作为展示, 普通场景仍然命中"今天".
+        let displayEnd = end.addingTimeInterval(-1)
+        let rangeLabel = "\(titleFmt.string(from: start)) — \(titleFmt.string(from: displayEnd))"
 
-        // Group by day, take up to 3 items per day as highlights.
+        // Group by day, take up to 3 items per day as highlights (poster only).
         let dayFmt = DateFormatter()
         dayFmt.locale = Locale(identifier: "zh_CN")
         dayFmt.dateFormat = "M.d EEE"
@@ -242,12 +245,7 @@ struct WeeklySummary {
             )
         }
 
-        let md = buildMarkdown(
-            range: rangeLabel,
-            completed: completed,
-            entries: entries,
-            scope: scope
-        )
+        let md = buildMarkdown(completed: completed, entries: entries)
 
         return WeeklySummary(
             rangeLabel: rangeLabel,
@@ -258,52 +256,41 @@ struct WeeklySummary {
         )
     }
 
-    private static func range(for scope: RiverView.Scope) -> (Date, Date) {
+    /// Markdown 输出: 严格按日期降序分组, 每天一个 # 标题, 每天内部时间正序.
+    /// 这是为了直接粘贴进周报系统而生 — 不要任何小结、统计、装饰, 只给"日期 + 内容".
+    private static func buildMarkdown(completed: [Todo], entries: [Entry]) -> String {
+        struct Row {
+            let content: String
+            let date: Date
+            let isTodo: Bool
+        }
+
+        let rows = entries.map { Row(content: $0.content, date: $0.createdDate, isTodo: false) }
+            + completed.map { Row(content: $0.content, date: $0.doneDate ?? $0.createdDate, isTodo: true) }
+
+        guard !rows.isEmpty else { return "" }
+
         let cal = Calendar.current
-        let now = Date()
-        let start: Date
-        switch scope {
-        case .today:
-            start = cal.startOfDay(for: now)
-        case .week:
-            var comps = cal.dateComponents([.yearForWeekOfYear, .weekOfYear], from: now)
-            comps.weekday = 2
-            start = cal.date(from: comps) ?? cal.startOfDay(for: now)
-        case .month:
-            let comps = cal.dateComponents([.year, .month], from: now)
-            start = cal.date(from: comps) ?? cal.startOfDay(for: now)
-        }
-        return (start, now)
-    }
+        let grouped = Dictionary(grouping: rows) { cal.startOfDay(for: $0.date) }
+        let sortedDays = grouped.keys.sorted(by: >)
 
-    private static func buildMarkdown(range: String, completed: [Todo], entries: [Entry], scope: RiverView.Scope) -> String {
-        let scopeLabel: String
-        switch scope {
-        case .today: scopeLabel = "今天"
-        case .week: scopeLabel = "本周"
-        case .month: scopeLabel = "本月"
-        }
-        var md = "# \(scopeLabel)小结 (\(range))\n\n"
-        md += "- 完成 **\(completed.count)** 件事\n"
-        md += "- 日志 \(entries.count) 条\n\n"
+        let dayFmt = DateFormatter()
+        dayFmt.locale = Locale(identifier: "zh_CN")
+        dayFmt.dateFormat = "M月d日 EEEE"
 
-        if !completed.isEmpty {
-            md += "## 完成的\n\n"
-            for t in completed.sorted(by: { $0.createdAt > $1.createdAt }) {
-                md += "- ✅ \(t.content)\n"
+        var md = ""
+        for (idx, day) in sortedDays.enumerated() {
+            md += "# \(dayFmt.string(from: day))\n"
+            let items = (grouped[day] ?? []).sorted { $0.date < $1.date }
+            for row in items {
+                if row.isTodo {
+                    md += "- ✅ \(row.content)\n"
+                } else {
+                    md += "- \(row.content)\n"
+                }
             }
-            md += "\n"
+            if idx < sortedDays.count - 1 { md += "\n" }
         }
-
-        if !entries.isEmpty {
-            md += "## 日志\n\n"
-            for e in entries.sorted(by: { $0.createdAt > $1.createdAt }) {
-                md += "- \(e.content)\n"
-            }
-            md += "\n"
-        }
-
-        md += "---\n_jotted this week._\n"
         return md
     }
 }

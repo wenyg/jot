@@ -170,10 +170,30 @@ final class Store: ObservableObject {
         }) ?? []
     }
 
+    func entries(since: Date, until: Date) -> [Entry] {
+        (try? dbQueue.read { db in
+            try Entry
+                .filter(Entry.Columns.createdAt >= since.timeIntervalSince1970)
+                .filter(Entry.Columns.createdAt < until.timeIntervalSince1970)
+                .order(Entry.Columns.createdAt.desc)
+                .fetchAll(db)
+        }) ?? []
+    }
+
     func todos(since: Date) -> [Todo] {
         (try? dbQueue.read { db in
             try Todo
                 .filter(Todo.Columns.createdAt >= since.timeIntervalSince1970)
+                .order(Todo.Columns.createdAt.desc)
+                .fetchAll(db)
+        }) ?? []
+    }
+
+    func todos(since: Date, until: Date) -> [Todo] {
+        (try? dbQueue.read { db in
+            try Todo
+                .filter(Todo.Columns.createdAt >= since.timeIntervalSince1970)
+                .filter(Todo.Columns.createdAt < until.timeIntervalSince1970)
                 .order(Todo.Columns.createdAt.desc)
                 .fetchAll(db)
         }) ?? []
