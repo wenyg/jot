@@ -1,0 +1,123 @@
+name: Release
+
+# Builds a Universal (arm64 + x86_64) ad-hoc-signed Jot.app and attaches it to
+# a GitHub Release whenever a `v*` tag is pushed.
+#
+# Workflow:
+#   git tag v0.2.0
+#   git push --tags
+# CI takes care of the rest.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          xcodebuild -version
+          swift --version
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Build (Release, Universal)
+        run: |
+          set -euo pipefail
+          DERIVED=$(mktemp -d)
+          xcodebuild \
+            -project Dogbody.xcodeproj \
+            -scheme Dogbody \
+            -configuration Release \
+            -derivedDataPath "$DERIVED" \
+            ARCHS="arm64 x86_64" \
+            ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="-" \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGNING_ALLOWED=NO \
+            build | xcpretty || true
+          # Re-run without xcpretty if it swallowed an error
+          if [ ! -d "$DERIVED/Build/Products/Release/Dogbody.app" ]; then
+            xcodebuild \
+              -project Dogbody.xcodeproj \
+              -scheme Dogbody \
+              -configuration Release \
+              -derivedDataPath "$DERIVED" \
+              ARCHS="arm64 x86_64" \
+              ONLY_ACTIVE_ARCH=NO \
+              CODE_SIGN_IDENTITY="-" \
+              CODE_SIGNING_REQUIRED=NO \
+              CODE_SIGNING_ALLOWED=NO \
+              build
+          fi
+          echo "DERIVED=$DERIVED" >> "$GITHUB_ENV"
+
+      - name: Verify universal slices
+        run: |
+          BIN="$DERIVED/Build/Products/Release/Dogbody.app/Contents/MacOS/Dogbody"
+          file "$BIN"
+          lipo -archs "$BIN"
+
+      - name: Re-sign (ad-hoc) and bundle
+        run: |
+          set -euo pipefail
+          APP="$DERIVED/Build/Products/Release/Dogbody.app"
+          # Rename to product display name "Jot" for the user-facing zip.
+          STAGE=$(mktemp -d)
+          cp -R "$APP" "$STAGE/Jot.app"
+          # Ad-hoc re-sign the whole bundle so all archs/frameworks are covered.
+          codesign --force --deep --sign - "$STAGE/Jot.app"
+          codesign --verify --deep --strict --verbose=2 "$STAGE/Jot.app"
+          cd "$STAGE"
+          ZIP="Jot-${GITHUB_REF_NAME}-macOS-universal.zip"
+          # ditto preserves resource forks/extended attributes correctly.
+          ditto -c -k --sequesterRsrc --keepParent "Jot.app" "$ZIP"
+          shasum -a 256 "$ZIP" | tee "$ZIP.sha256"
+          echo "ARTIFACT_DIR=$STAGE" >> "$GITHUB_ENV"
+          echo "ARTIFACT_ZIP=$ZIP" >> "$GITHUB_ENV"
+
+      - name: Upload artifact (always, for non-tag runs too)
+        uses: actions/upload-artifact@v4
+        with:
+          name: Jot-macOS-universal
+          path: |
+            ${{ env.ARTIFACT_DIR }}/${{ env.ARTIFACT_ZIP }}
+            ${{ env.ARTIFACT_DIR }}/${{ env.ARTIFACT_ZIP }}.sha256
+
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            ${{ env.ARTIFACT_DIR }}/${{ env.ARTIFACT_ZIP }}
+            ${{ env.ARTIFACT_DIR }}/${{ env.ARTIFACT_ZIP }}.sha256
+          body: |
+            ## 安装
+
+            1. 下载下方的 `Jot-*-macOS-universal.zip`, 解压.
+            2. 把 `Jot.app` 拖进 `/Applications`.
+            3. 首次打开会被 Gatekeeper 拦 (因为没有 Apple Developer 证书). 在终端跑一行:
+
+               ```bash
+               xattr -dr com.apple.quarantine /Applications/Jot.app
+               ```
+
+               然后双击就能开了.
+
+            > Universal binary, 同时支持 Apple Silicon 和 Intel Mac. 需要 macOS 13.1+.
