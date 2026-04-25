@@ -8,6 +8,7 @@ import SwiftUI
 struct PetView: View {
     @ObservedObject var animator: PetAnimator
     let onTap: () -> Void
+    let onRightClick: () -> Void
 
     /// Logical size of the pet's drawable frame (points). Must be large
     /// enough to hold the silhouette (which is bodyWidth × 1.18) plus some
@@ -28,6 +29,10 @@ struct PetView: View {
                     onTap()
                     animator.touch()
                 },
+                onRightClick: {
+                    onRightClick()
+                    animator.touch()
+                },
                 onDragBegan: {
                     animator.isBeingDragged = true
                 },
@@ -41,6 +46,6 @@ struct PetView: View {
             )
         }
         .frame(width: frameWidth, height: frameHeight)
-        .help("点我记一笔, 拖我换位置")
+        .help("点我记一笔, 右键看回顾, 拖我换位置")
     }
 }
