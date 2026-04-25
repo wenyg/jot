@@ -22,7 +22,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self?.animator.set(.thinking)
         }
         petController.onPanelClosed = { [weak self] in
-            self?.animator.set(.idle)
+            // Only "stop thinking" — don't clobber a mood (happy / celebrate)
+            // that handleInput just set right before the panel closes.
+            if self?.animator.state == .thinking {
+                self?.animator.set(.idle)
+            }
+        }
+        petController.onRightClick = {
+            // Hand off to the SwiftUI side (MenuBarLabel listens) — only
+            // SwiftUI can cleanly open a Scene by id.
+            NotificationCenter.default.post(name: .dogbodyOpenRiver, object: nil)
         }
         petController.show()
 

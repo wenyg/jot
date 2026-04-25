@@ -13,6 +13,10 @@ final class PetWindowController: NSObject, ObservableObject {
     var onOpenRequested: (() -> Void)?
     /// Called after the quick input panel closes.
     var onPanelClosed: (() -> Void)?
+    /// Called when the user right-clicks (or ctrl-clicks) the pet — the
+    /// designed shortcut for "open today's review" (the calm second action
+    /// of the pet, mirroring left-click = "write something").
+    var onRightClick: (() -> Void)?
 
     /// Mirrors `isVisible` but published so SwiftUI menus can re-render their
     /// label ("显示 Jot" / "隐藏 Jot") without polling.
@@ -52,7 +56,8 @@ final class PetWindowController: NSObject, ObservableObject {
 
         let view = PetView(
             animator: animatorRef,
-            onTap: { [weak self] in self?.handleTap() }
+            onTap: { [weak self] in self?.handleTap() },
+            onRightClick: { [weak self] in self?.onRightClick?() }
         )
         win.contentView = NSHostingView(rootView: view)
         win.orderFront(nil)
@@ -112,7 +117,12 @@ final class PetWindowController: NSObject, ObservableObject {
         isPerformingWalk = true
         animate(window: win, to: home, duration: 1.0) { [weak self] in
             self?.isPerformingWalk = false
-            self?.animator?.set(.idle)
+            // Only end the reminder mood — don't overwrite happy / celebrate
+            // that handleInput may have just set when recording dismissed
+            // the reminder.
+            if self?.animator?.state == .remind {
+                self?.animator?.set(.idle)
+            }
         }
     }
 

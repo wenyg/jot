@@ -1,14 +1,20 @@
 import SwiftUI
 import AppKit
 
-/// Transparent overlay that handles pet window dragging via the *native*
-/// `NSWindow.performDrag(with:)` API instead of SwiftUI's `DragGesture`.
+/// Transparent overlay that handles pet window dragging via direct AppKit
+/// `mouseDragged` + `setFrameOrigin`, *not* SwiftUI's `DragGesture` and not
+/// `NSWindow.performDrag`.
 ///
-/// Why: `DragGesture.onChanged { setFrameOrigin(...) }` runs the position
-/// update on the SwiftUI event clock and can compete with rendering work on
-/// the main thread, producing a stuttery drag. `performDrag` hands the move
-/// off to the macOS window server, which moves the window frame-perfectly at
-/// the display's refresh rate.
+/// Why not SwiftUI's `DragGesture`: it runs through SwiftUI's hit-testing /
+/// gesture pipeline on every event, which competes with view body rebuilds
+/// and tends to stutter for window-following drags.
+///
+/// Why not `NSWindow.performDrag(with:)`: that call *blocks the main thread*
+/// until mouse-up, so SwiftUI never gets to commit the `isBeingDragged = true`
+/// state change — the pet sprite never flips to `dog_dragging` and the
+/// in-drag wiggle animation never ticks. Doing the move ourselves with
+/// `setFrameOrigin` on each `mouseDragged` keeps the runloop alive so the
+/// sprite updates and animates throughout the drag.
 ///
 /// Also handles tap detection: if the cursor doesn't move beyond
 /// `dragSlop` between mouseDown and mouseUp, we treat it as a click and
@@ -19,6 +25,7 @@ import AppKit
 /// bounding box pass through to the desktop, not the pet.
 struct PetDragHandle: NSViewRepresentable {
     let onTap: () -> Void
+    let onRightClick: () -> Void
     let onDragBegan: () -> Void
     let onDragEnded: () -> Void
     let onHoverChange: (Bool) -> Void
@@ -26,6 +33,7 @@ struct PetDragHandle: NSViewRepresentable {
     func makeNSView(context: Context) -> PetDragNSView {
         let v = PetDragNSView()
         v.onTap = onTap
+        v.onRightClick = onRightClick
         v.onDragBegan = onDragBegan
         v.onDragEnded = onDragEnded
         v.onHoverChange = onHoverChange
@@ -34,6 +42,7 @@ struct PetDragHandle: NSViewRepresentable {
 
     func updateNSView(_ nsView: PetDragNSView, context: Context) {
         nsView.onTap = onTap
+        nsView.onRightClick = onRightClick
         nsView.onDragBegan = onDragBegan
         nsView.onDragEnded = onDragEnded
         nsView.onHoverChange = onHoverChange
@@ -42,6 +51,7 @@ struct PetDragHandle: NSViewRepresentable {
 
 final class PetDragNSView: NSView {
     var onTap: (() -> Void)?
+    var onRightClick: (() -> Void)?
     var onDragBegan: (() -> Void)?
     var onDragEnded: (() -> Void)?
     var onHoverChange: ((Bool) -> Void)?
@@ -53,6 +63,13 @@ final class PetDragNSView: NSView {
     private var mouseDownLocation: NSPoint?
     private var didStartDrag = false
     private var trackingArea: NSTrackingArea?
+
+    // Captured at mouseDown so we can compute the new window origin from the
+    // global cursor delta on each mouseDragged. Using screen coords (rather
+    // than `event.locationInWindow` deltas) avoids feedback loops once the
+    // window itself starts moving.
+    private var dragStartScreenLocation: NSPoint?
+    private var windowOriginAtDragStart: NSPoint?
 
     override init(frame frameRect: NSRect) {
         super.init(frame: frameRect)
@@ -102,34 +119,55 @@ final class PetDragNSView: NSView {
     override func mouseDown(with event: NSEvent) {
         mouseDownLocation = event.locationInWindow
         didStartDrag = false
+        dragStartScreenLocation = NSEvent.mouseLocation
+        windowOriginAtDragStart = window?.frame.origin
     }
 
     override func mouseDragged(with event: NSEvent) {
-        guard let start = mouseDownLocation else { return }
+        guard let start = mouseDownLocation,
+              let win = window,
+              let dragStartScreen = dragStartScreenLocation,
+              let originAtStart = windowOriginAtDragStart
+        else { return }
+
         let here = event.locationInWindow
         let dx = here.x - start.x
         let dy = here.y - start.y
 
-        // Once we've moved past the slop threshold, hand the rest of the
-        // drag off to the window server. `performDrag` blocks until mouseUp,
-        // so we won't get further mouseDragged events for this gesture.
         if !didStartDrag, hypot(dx, dy) > dragSlop {
             didStartDrag = true
             onDragBegan?()
-            window?.performDrag(with: event)
-            // performDrag returns when the user releases the mouse, so signal
-            // drag end here. We won't see a mouseUp on this view because the
-            // window server consumed it.
-            onDragEnded?()
-            mouseDownLocation = nil
         }
+
+        guard didStartDrag else { return }
+
+        // Move via global cursor delta against the window origin captured at
+        // mouseDown — independent of how far the window itself has moved so
+        // far this gesture.
+        let now = NSEvent.mouseLocation
+        let newOrigin = NSPoint(
+            x: originAtStart.x + (now.x - dragStartScreen.x),
+            y: originAtStart.y + (now.y - dragStartScreen.y)
+        )
+        win.setFrameOrigin(newOrigin)
     }
 
     override func mouseUp(with event: NSEvent) {
-        defer { mouseDownLocation = nil }
-        // performDrag swallowed the mouseUp; nothing to do.
-        guard !didStartDrag else { return }
-        // No drag happened → it's a tap.
+        defer {
+            mouseDownLocation = nil
+            dragStartScreenLocation = nil
+            windowOriginAtDragStart = nil
+        }
+        if didStartDrag {
+            onDragEnded?()
+            return
+        }
         onTap?()
+    }
+
+    // Right-click (and ctrl-click, which AppKit also routes through
+    // `rightMouseUp`): the pet's calm second action — open today's review.
+    override func rightMouseUp(with event: NSEvent) {
+        onRightClick?()
     }
 }
